@@ -1,0 +1,250 @@
+<div class="page">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">MCP</span>
+      <div class="brand-text">
+        <h1>MCP Client</h1>
+        <p>Angular demo for the six tools exposed by MCP-Server</p>
+      </div>
+    </div>
+
+    <div class="status" [class.status--ok]="mcp.connected()" [class.status--error]="!!mcp.error()">
+      @if (mcp.connecting()) {
+        <span class="dot dot--pending"></span>
+        <span>Connecting to MCP server&hellip;</span>
+      } @else if (mcp.connected()) {
+        <span class="dot dot--ok"></span>
+        <span>
+          Connected to <strong>{{ mcp.serverInfo()?.name }}</strong> v{{ mcp.serverInfo()?.version }}
+          &middot; session {{ mcp.sessionId()?.slice(0, 8) }}&hellip;
+        </span>
+      } @else {
+        <span class="dot dot--error"></span>
+        <span>{{ mcp.error() || 'Not connected' }}</span>
+      }
+      <button type="button" class="btn btn--ghost" (click)="reconnect()" [disabled]="mcp.connecting()">
+        Reconnect
+      </button>
+    </div>
+  </header>
+
+  @if (!mcp.connected() && !mcp.connecting()) {
+    <div class="banner banner--error">
+      Couldn't reach the MCP server. Make sure MCP-Server is running locally
+      (<code>npm start</code> in the MCP-Server project, default
+      <code>http://localhost:3000</code>), then click Reconnect.
+    </div>
+  }
+
+  <main class="grid">
+    <!-- Tool 1: ping -->
+    <section class="card">
+      <header class="card-header">
+        <span class="card-icon">🏓</span>
+        <div>
+          <h2>Ping</h2>
+          <p>Health-check tool that echoes back a message.</p>
+        </div>
+      </header>
+
+      <label class="field">
+        <span>Message</span>
+        <input type="text" [(ngModel)]="pingMessage" placeholder="Optional message" />
+      </label>
+
+      <button type="button" class="btn" [disabled]="!mcp.connected() || pingLoading()" (click)="runPing()">
+        {{ pingLoading() ? 'Sending…' : 'Send Ping' }}
+      </button>
+
+      @if (pingError()) {
+        <p class="result result--error">{{ pingError() }}</p>
+      } @else if (pingResult()) {
+        <p class="result result--ok">{{ pingResult() }}</p>
+      }
+    </section>
+
+    <!-- Tool 2: text-stats -->
+    <section class="card">
+      <header class="card-header">
+        <span class="card-icon">📊</span>
+        <div>
+          <h2>Text Stats</h2>
+          <p>Word, character, sentence and line counts for a block of text.</p>
+        </div>
+      </header>
+
+      <label class="field">
+        <span>Text</span>
+        <textarea rows="3" [(ngModel)]="statsText" placeholder="Paste or type some text"></textarea>
+      </label>
+
+      <button type="button" class="btn" [disabled]="!mcp.connected() || statsLoading()" (click)="runTextStats()">
+        {{ statsLoading() ? 'Analyzing…' : 'Analyze' }}
+      </button>
+
+      @if (statsError()) {
+        <p class="result result--error">{{ statsError() }}</p>
+      } @else if (statsResult(); as stats) {
+        <div class="stat-grid">
+          <div class="stat-tile">
+            <span class="stat-value">{{ stats.words }}</span>
+            <span class="stat-label">words</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-value">{{ stats.characters }}</span>
+            <span class="stat-label">characters</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-value">{{ stats.sentences }}</span>
+            <span class="stat-label">sentences</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-value">{{ stats.lines }}</span>
+            <span class="stat-label">lines</span>
+          </div>
+          <div class="stat-tile stat-tile--wide">
+            <span class="stat-value">{{ stats.readingTimeSeconds }}s</span>
+            <span class="stat-label">est. reading time</span>
+          </div>
+        </div>
+      }
+    </section>
+
+    <!-- Tool 3: generate-avatar -->
+    <section class="card">
+      <header class="card-header">
+        <span class="card-icon">🎨</span>
+        <div>
+          <h2>Generate Avatar</h2>
+          <p>Deterministic identicon-style SVG avatar from a seed string.</p>
+        </div>
+      </header>
+
+      <label class="field">
+        <span>Seed</span>
+        <input type="text" [(ngModel)]="avatarSeed" placeholder="e.g. a username" />
+      </label>
+
+      <label class="field">
+        <span>Size (px)</span>
+        <input type="number" [(ngModel)]="avatarSize" min="64" max="512" step="32" />
+      </label>
+
+      <button
+        type="button"
+        class="btn"
+        [disabled]="!mcp.connected() || avatarLoading()"
+        (click)="runGenerateAvatar()"
+      >
+        {{ avatarLoading() ? 'Generating…' : 'Generate' }}
+      </button>
+
+      @if (avatarError()) {
+        <p class="result result--error">{{ avatarError() }}</p>
+      } @else if (avatarImage(); as image) {
+        <div class="avatar-preview">
+          <img [src]="image" alt="Generated identicon avatar" />
+        </div>
+      }
+    </section>
+
+    <!-- Tool 4: list-files -->
+    <section class="card">
+      <header class="card-header">
+        <span class="card-icon">🗂️</span>
+        <div>
+          <h2>List Sample Files</h2>
+          <p>Files available in the server's sandboxed sample-files directory.</p>
+        </div>
+      </header>
+
+      <button
+        type="button"
+        class="btn"
+        [disabled]="!mcp.connected() || filesLoading()"
+        (click)="runListFiles()"
+      >
+        {{ filesLoading() ? 'Listing…' : 'List Files' }}
+      </button>
+
+      @if (filesError()) {
+        <p class="result result--error">{{ filesError() }}</p>
+      } @else if (files().length) {
+        <ul class="file-list">
+          @for (file of files(); track file.name) {
+            <li>
+              <button type="button" class="file-chip" (click)="runReadFile(file.name)">
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-size">{{ file.size }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+        <p class="hint">Click a file to load it into Read File below.</p>
+      }
+    </section>
+
+    <!-- Tool 5: read-file -->
+    <section class="card">
+      <header class="card-header">
+        <span class="card-icon">📄</span>
+        <div>
+          <h2>Read Sample File</h2>
+          <p>Reads a file's contents from the sandboxed directory.</p>
+        </div>
+      </header>
+
+      <label class="field">
+        <span>Filename</span>
+        <input type="text" [(ngModel)]="readFilename" placeholder="e.g. welcome.txt" />
+      </label>
+
+      <button
+        type="button"
+        class="btn"
+        [disabled]="!mcp.connected() || readFileLoading()"
+        (click)="runReadFile()"
+      >
+        {{ readFileLoading() ? 'Reading…' : 'Read File' }}
+      </button>
+
+      @if (readFileError()) {
+        <p class="result result--error">{{ readFileError() }}</p>
+      } @else if (readFileResult()) {
+        <pre class="file-contents">{{ readFileResult() }}</pre>
+      }
+    </section>
+
+    <!-- Tool 6: roll-dice -->
+    <section class="card">
+      <header class="card-header">
+        <span class="card-icon">🎲</span>
+        <div>
+          <h2>Roll Dice</h2>
+          <p>Rolls one or more N-sided dice and totals the results.</p>
+        </div>
+      </header>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Sides</span>
+          <input type="number" [(ngModel)]="diceSides" min="2" max="1000" />
+        </label>
+        <label class="field">
+          <span>Count</span>
+          <input type="number" [(ngModel)]="diceCount" min="1" max="20" />
+        </label>
+      </div>
+
+      <button type="button" class="btn" [disabled]="!mcp.connected() || diceLoading()" (click)="runRollDice()">
+        {{ diceLoading() ? 'Rolling…' : 'Roll' }}
+      </button>
+
+      @if (diceError()) {
+        <p class="result result--error">{{ diceError() }}</p>
+      } @else if (diceResult()) {
+        <p class="result result--ok">{{ diceResult() }}</p>
+      }
+    </section>
+  </main>
+</div>
